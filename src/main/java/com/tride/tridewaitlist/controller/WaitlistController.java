@@ -26,11 +26,12 @@ public class WaitlistController {
 
     @PostMapping("/add")
     public ResponseEntity<Map<String, String>> addToWaitlist(@RequestBody Waitlist waitlist) {
-//        if (waitlistService.emailExists(waitlist.getEmail())) {
-//            return ResponseEntity.status(HttpStatus.CONFLICT)
-//                    .body(Map.of("Status", "409",
-//                            "Message", "Email already exists in waitlist."));
-//        }
+
+        if (waitlistService.emailExists(waitlist.getEmail())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("Status", "409",
+                            "Message", "Email already exists in waitlist."));
+        }
 
         if (!waitlistService.isValidEmail(waitlist.getEmail())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
