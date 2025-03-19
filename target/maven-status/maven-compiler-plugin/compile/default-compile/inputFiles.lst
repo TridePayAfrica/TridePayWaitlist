@@ -1,0 +1,7 @@
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/TrideApplication.java
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/controller/WaitlistController.java
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/model/Waitlist.java
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/repository/WaitlistRepository.java
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/service/EmailService.java
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/service/WaitlistService.java
+/Users/obinnaekwealor/Tride/src/main/java/com/tride/tridewaitlist/service/WaitlistServiceImpl.java
