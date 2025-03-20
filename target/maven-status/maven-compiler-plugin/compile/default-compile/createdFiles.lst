@@ -3,5 +3,6 @@ com/tride/tridewaitlist/controller/WaitlistController.class
 com/tride/tridewaitlist/TrideApplication.class
 com/tride/tridewaitlist/service/WaitlistService.class
 com/tride/tridewaitlist/repository/WaitlistRepository.class
+com/tride/tridewaitlist/Config/WebConfig.class
 com/tride/tridewaitlist/service/WaitlistServiceImpl.class
 com/tride/tridewaitlist/model/Waitlist.class
