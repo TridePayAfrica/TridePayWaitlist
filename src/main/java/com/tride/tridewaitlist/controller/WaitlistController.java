@@ -33,12 +33,12 @@ public class WaitlistController {
                     .body(Map.of("Status", "400",
                             "Message", "Full name cannot be empty."));
         }
-        if (waitlistService.emailExists(waitlist.getEmail())) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("Status", "409",
-                            "Message", "Email already exists in waitlist."));
-        }
-
+//        if (waitlistService.emailExists(waitlist.getEmail())) {
+//            return ResponseEntity.status(HttpStatus.CONFLICT)
+//                    .body(Map.of("Status", "409",
+//                            "Message", "Email already exists in waitlist."));
+//        }
+//
 
         if (!waitlistService.isValidEmail(waitlist.getEmail())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -46,7 +46,7 @@ public class WaitlistController {
                             "Message", "Invalid email format. Please provide a valid email address."));
         }
 
-        waitlistService.addToWaitlist(waitlist);
+        waitlistService.    addToWaitlist(waitlist);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(Map.of("Status", "200",
                         "Message", "Added to waitlist successfully!"));
