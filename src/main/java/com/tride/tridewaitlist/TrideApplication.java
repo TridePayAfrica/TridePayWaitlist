@@ -8,9 +8,17 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 
 
-@SpringBootApplication
+@SpringBootApplication(
+        exclude = {
+                DataSourceAutoConfiguration.class,
+                HibernateJpaAutoConfiguration.class
+        }
+)
 @EnableAsync
 @EnableScheduling
 public class TrideApplication {
