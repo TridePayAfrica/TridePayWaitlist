@@ -10,8 +10,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.reactive.function.client.WebClient;
 
-
-
 @EnableAsync
 @EnableScheduling
 @SpringBootApplication
@@ -21,17 +19,17 @@ public class TrideApplication {
     private final WebClient webClient;
 
     public TrideApplication(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.baseUrl("https://tride-waitlist-service.onrender.com").build();
+        this.webClient = WebClient.create();
     }
 
     public static void main(String[] args) {
         SpringApplication.run(TrideApplication.class, args);
     }
-
     @Scheduled(fixedRate = 300000)
     public void keepServerAlive() {
+        log.info("Pinging server to keep it alive...");
         webClient.get()
-                .uri("/")
+                .uri("https://tride-waitlist-service.onrender.com/api/waitlist/welcome")
                 .retrieve()
                 .bodyToMono(String.class)
                 .subscribe(
