@@ -1,30 +1,57 @@
 package com.tride.tridewaitlist.service;
 
 import com.tride.tridewaitlist.model.Waitlist;
-import com.tride.tridewaitlist.repository.WaitlistRepository;
+//import com.tride.tridewaitlist.repository.WaitlistRepository;
 import jakarta.mail.MessagingException;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-
-@Slf4j
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 @Service
 public class WaitlistServiceImpl implements WaitlistService {
+    private static final Logger log = LoggerFactory.getLogger(WaitlistServiceImpl.class);
 
-    private final WaitlistRepository waitlistRepository;
     private final EmailService emailService;
+    private final RestTemplate restTemplate;
+    private final String airtableApiKey;
+    private final String airtableBaseId;
+    private final String airtableTableName;
 
-    public WaitlistServiceImpl(WaitlistRepository waitlistRepository, EmailService emailService) {
-        this.waitlistRepository = waitlistRepository;
+    public WaitlistServiceImpl(//WaitlistRepository waitlistRepository,
+                               EmailService emailService,
+                               RestTemplate restTemplate,
+                               @Value("${airtable.api-key}") String airtableApiKey,
+                               @Value("${airtable.base-id}") String airtableBaseId,
+                               @Value("${airtable.table-name}") String airtableTableName) {
         this.emailService = emailService;
+        this.restTemplate = restTemplate;
+        this.airtableApiKey = airtableApiKey;
+        this.airtableBaseId = airtableBaseId;
+        this.airtableTableName = airtableTableName;
     }
 
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+//
+//    @Override
+//    public boolean emailExists(String email) {
+//        //return waitlistRepository.existsByEmail(email);
+//        return yes;
+//    }
 
     @Override
     public boolean emailExists(String email) {
-        return waitlistRepository.existsByEmail(email);
+        return false;
     }
 
     @Override
@@ -33,7 +60,33 @@ public class WaitlistServiceImpl implements WaitlistService {
             throw new IllegalArgumentException("Invalid email format");
         }
         waitlist.setJoinDate(LocalDateTime.now());
-        waitlistRepository.save(waitlist);
+
+        try {
+            String url = String.format("https://api.airtable.com/v0/%s/%s", airtableBaseId.trim(), airtableTableName.trim());
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + airtableApiKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm:ss a");
+            String formattedJoinDate = waitlist.getJoinDate().format(formatter);
+
+            Map<String, Object> fields = new HashMap<>();
+            fields.put("Full Name", waitlist.getFullName());
+            fields.put("Email", waitlist.getEmail());
+            fields.put("Join Date", formattedJoinDate);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("fields", fields);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+            restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+
+            log.info("Successfully added to Airtable: {}", waitlist.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send to Airtable for email {}: {}", waitlist.getEmail(), e.getMessage());
+            throw new RuntimeException("Airtable request failed: " + e.getMessage(), e);
+        }
+
         sendWaitlistConfirmationEmail(waitlist.getEmail(), waitlist.getFullName());
     }
 
@@ -43,166 +96,378 @@ public class WaitlistServiceImpl implements WaitlistService {
 
     private void sendWaitlistConfirmationEmail(String email, String fullName) {
         String subject = "Welcome to Our Waitlist!";
-        String htmlContent = "<!DOCTYPE html>\n" +
-                "<html lang=\"en\">\n" +
-                "<head>\n" +
-                "    <meta charset=\"UTF-8\">\n" +
-                "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
-                "    <title>You're on the Waitlist!</title>\n" +
-                "</head>\n" +
-                "<body style=\"font-family: 'Arial', sans-serif; line-height: 1.6; color: #071623; background-color: #f4f4f4; padding: 20px;\">\n" +
-                "    <div class=\"email-container\" style=\"max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);\">\n" +
-                "        <header class=\"email-header\" style=\"background-color: #071623; color: #ffffff; padding: 20px; text-align: center;\">\n" +
-                "            <div class=\"logo\" style=\"display: flex; align-items: center; justify-content: center;\">\n" +
-                "                <h1 style=\"font-size: 32px; font-weight: bold; margin: 0; letter-spacing: 1px;\">TridePay</h1>\n" +
-                "            </div>\n" +
-                "        </header>\n" +
-                "        \n" +
-                "        <main class=\"email-body\" style=\"padding: 30px; background-color: #ffffff;\">\n" +
-                "            <div class=\"welcome-section\" style=\"margin-bottom: 25px;\">\n" +
-                "                <h2 style=\"color: #2D5679; margin-bottom: 15px; font-size: 24px;\">Welcome to TridePay!</h2>\n" +
-                "                <p class=\"greeting\" style=\"font-weight: bold; margin-bottom: 10px;\">Dear " + fullName + ",</p>\n" +
-                "                <p>We're thrilled to have you on board as we build the future of seamless payments.</p>\n" +
-                "            </div>\n" +
-                "            \n" +
-                "            <div class=\"features-section\" style=\"background-color: #DFEAFA; padding: 20px; border-radius: 8px; margin-bottom: 25px;\">\n" +
-                "                <p class=\"intro\" style=\"margin-bottom: 15px;\">TridePay is designed to make managing your cards and transactions easier than ever. With our innovative features:</p>\n" +
-                "                <ul class=\"features-list\" style=\"list-style-type: none; margin-left: 10px; margin-bottom: 15px;\">\n" +
-                "                    <li style=\"margin-bottom: 10px; display: flex; align-items: center;\"><span class=\"feature-icon\" style=\"margin-right: 10px; font-size: 18px;\">\uD83D\uDCB3</span> Store all your ATM cards in one place</li>\n" +
-                "                    <li style=\"margin-bottom: 10px; display: flex; align-items: center;\"><span class=\"feature-icon\" style=\"margin-right: 10px; font-size: 18px;\">\uD83D\uDCF1</span> Make effortless NFC payments</li>\n" +
-                "                    <li style=\"margin-bottom: 10px; display: flex; align-items: center;\"><span class=\"feature-icon\" style=\"margin-right: 10px; font-size: 18px;\">\uD83D\uDCB0</span> Create virtual dollar cards</li>\n" +
-                "                    <li style=\"margin-bottom: 10px; display: flex; align-items: center;\"><span class=\"feature-icon\" style=\"margin-right: 10px; font-size: 18px;\">\uD83D\uDCDC</span> Easily manage mobile and service provider payments</li>\n" +
-                "                </ul>\n" +
-                "                <p class=\"outro\" style=\"font-weight: bold; color: #2D5679;\">We're redefining convenience for Nigerians.</p>\n" +
-                "            </div>\n" +
-                "            \n" +
-                "            <div class=\"waitlist-section\" style=\"margin-bottom: 25px; padding: 15px; border-left: 4px solid #58A1DD;\">\n" +
-                "                <p>As an early member of our waitlist, you'll be among the first to experience TridePay when we launch. Stay tuned for:</p>\n" +
-                "                <ul class=\"waitlist-benefits\" style=\"margin-left: 25px; margin-top: 10px; margin-bottom: 10px;\">\n" +
-                "                    <li style=\"margin-bottom: 5px;\">Exclusive updates</li>\n" +
-                "                    <li style=\"margin-bottom: 5px;\">Beta access</li>\n" +
-                "                    <li style=\"margin-bottom: 5px;\">Special offers</li>\n" +
-                "                </ul>\n" +
-                "            </div>\n" +
-                "            \n" +
-                "            <div class=\"closing-section\" style=\"margin-bottom: 20px;\">\n" +
-                "                <p>Thank you for joining us on this journey. If you have any questions, feel free to reply to this email—we'd love to hear from you.</p>\n" +
-                "                <p>Looking forward to making payments effortless with you.</p>\n" +
-                "                <p class=\"signature\" style=\"margin-top: 20px; font-weight: bold;\">Best regards,</p>\n" +
-                "                <p class=\"name\" style=\"font-weight: bold; color: #2D5679;\">Oluwakamiye Adetula</p>\n" +
-                "                <p class=\"title\" style=\"color: #427AAA; font-style: italic;\">CEO & Co-founder, TridePay</p>\n" +
-                "            </div>\n" +
-                "        </main>\n" +
-                "        \n" +
-                "        <footer class=\"email-footer\" style=\"background-color: #19354C; color: #ffffff; padding: 20px; text-align: center;\">\n" +
-                "            <div class=\"social-links\" style=\"margin-bottom: 15px;\">\n" +
-                "                <a href=\"#\" class=\"social-icon\" style=\"color: #9EC5F0; text-decoration: none; margin: 0 10px; font-size: 14px;\">Twitter</a>\n" +
-                "                <a href=\"#\" class=\"social-icon\" style=\"color: #9EC5F0; text-decoration: none; margin: 0 10px; font-size: 14px;\">Facebook</a>\n" +
-                "                <a href=\"#\" class=\"social-icon\" style=\"color: #9EC5F0; text-decoration: none; margin: 0 10px; font-size: 14px;\">Instagram</a>\n" +
-                "                <a href=\"#\" class=\"social-icon\" style=\"color: #9EC5F0; text-decoration: none; margin: 0 10px; font-size: 14px;\">LinkedIn</a>\n" +
-                "            </div>\n" +
-                "            <div class=\"footer-info\" style=\"font-size: 12px; color: #9EC5F0;\">\n" +
-                "                <p>&copy; 2025 TridePay. All rights reserved.</p>\n" +
-                "                <p>\n" +
-                "                    <a href=\"#\" style=\"color: #9EC5F0; text-decoration: none;\">Privacy Policy</a> | \n" +
-                "                    <a href=\"#\" style=\"color: #9EC5F0; text-decoration: none;\">Terms of Service</a> | \n" +
-                "                    <a href=\"#\" style=\"color: #9EC5F0; text-decoration: none;\">Unsubscribe</a>\n" +
-                "                </p>\n" +
-                "            </div>\n" +
-                "        </footer>\n" +
-                "    </div>\n" +
-                "\n" +
-                "    <style type=\"text/css\">\n" +
-                "        @media screen and (max-width: 480px) {\n" +
-                "            .link {\n" +
-                "                margin-left: 5px;\n" +
-                "            } \n" +
-                "            .main-heading {\n" +
-                "                color: #29003d;\n" +
-                "                font-family: Noto Sans, sans-serif;\n" +
-                "                font-size: 20px;\n" +
-                "                font-style: normal;\n" +
-                "                font-weight: 500;\n" +
-                "                line-height: normal;\n" +
-                "                width: 250px;\n" +
-                "                margin: 0;\n" +
-                "                margin-top: 44px;\n" +
-                "            }\n" +
-                "        }\n" +
-                "        @media screen and (max-width: 768px) {\n" +
-                "            .footer-container {\n" +
-                "                padding: 48px 12px;\n" +
-                "            }\n" +
-                "            .footer-logo {\n" +
-                "                margin: 0;\n" +
-                "                margin-right: 25%;\n" +
-                "                font-size: 16px;\n" +
-                "            }\n" +
-                "            .footer-social-icon {\n" +
-                "                width: 24px;\n" +
-                "                height: 24px;\n" +
-                "                margin-right: 10px;\n" +
-                "            }\n" +
-                "            .footer-address {\n" +
-                "                text-align: left;\n" +
-                "                margin: 0;\n" +
-                "                font-size: 14px;\n" +
-                "            }\n" +
-                "            .footer-address-div {\n" +
-                "                display: block;\n" +
-                "            }\n" +
-                "            .link {\n" +
-                "                margin-left: 20%;\n" +
-                "            }\n" +
-                "        }\n" +
-                "        @media screen and (min-width: 768px) {\n" +
-                "            .footer-container {\n" +
-                "                padding: 48px 48px;\n" +
-                "                margin-top: 67px;\n" +
-                "            }\n" +
-                "            .footer-logo {\n" +
-                "                margin: 0;\n" +
-                "                margin-right: 55%;\n" +
-                "                font-size: 20px;\n" +
-                "            }\n" +
-                "            .footer-social-icon {\n" +
-                "                width: 24px;\n" +
-                "                height: 24px;\n" +
-                "                margin-right: 20px;\n" +
-                "            }\n" +
-                "            .footer-address-div {\n" +
-                "                display: flex;\n" +
-                "                align-items: flex-start;\n" +
-                "            }\n" +
-                "            .footer-address {\n" +
-                "                text-align: right;\n" +
-                "                margin: 0;\n" +
-                "                font-size: 16px;\n" +
-                "            }\n" +
-                "            .main-heading {\n" +
-                "                color: #29003d;\n" +
-                "                font-family: Noto Sans, sans-serif;\n" +
-                "                font-size: 28px;\n" +
-                "                font-style: normal;\n" +
-                "                font-weight: 500;\n" +
-                "                line-height: normal;\n" +
-                "                width: 300px;\n" +
-                "                max-width: 50%;\n" +
-                "                margin: 0;\n" +
-                "                margin-top: 44px;\n" +
-                "            }\n" +
-                "            .link {\n" +
-                "                margin-left: 60%;\n" +
-                "            }\n" +
-                "        }\n" +
-                "    </style>\n" +
-                "</body>\n" +
-                "</html>\n";
+        String htmlTemplate =
+                "<!DOCTYPE html>\n" +
+                        "<html lang=\"en\">\n" +
+                        "<head>\n" +
+                        "  <meta charset=\"UTF-8\">\n" +
+                        "  <title>Welcome to TridePay</title>\n" +
+                        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n" +
+                        "  <style>\n" +
+                        "    body, table, td { \n" +
+                        "      margin: 0; \n" +
+                        "      padding: 0; \n" +
+                        "      border: 0; \n" +
+                        "      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; \n" +
+                        "      -webkit-font-smoothing: antialiased;\n" +
+                        "      -moz-osx-font-smoothing: grayscale;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .wrapper { \n" +
+                        "      width: 100%; \n" +
+                        "      background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);\n" +
+                        "      min-height: 100vh;\n" +
+                        "      padding: 60px 20px; \n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .container { \n" +
+                        "      max-width: 640px; \n" +
+                        "      width: 100% !important; \n" +
+                        "      margin: 0 auto; \n" +
+                        "      background: #ffffff;\n" +
+                        "      border-radius: 24px; \n" +
+                        "      overflow: hidden; \n" +
+                        "      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05);\n" +
+                        "      backdrop-filter: blur(20px);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .header { \n" +
+                        "      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);\n" +
+                        "      text-align: center; \n" +
+                        "      padding: 50px 30px; \n" +
+                        "      position: relative;\n" +
+                        "      overflow: hidden;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .header::before {\n" +
+                        "      content: '';\n" +
+                        "      position: absolute;\n" +
+                        "      top: 0;\n" +
+                        "      left: 0;\n" +
+                        "      right: 0;\n" +
+                        "      bottom: 0;\n" +
+                        "      background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 50%, rgba(51, 65, 85, 0.95) 100%);\n" +
+                        "      backdrop-filter: blur(10px);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .header::after {\n" +
+                        "      content: '';\n" +
+                        "      position: absolute;\n" +
+                        "      bottom: 0;\n" +
+                        "      left: 0;\n" +
+                        "      right: 0;\n" +
+                        "      height: 1px;\n" +
+                        "      background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .header-content {\n" +
+                        "      position: relative;\n" +
+                        "      z-index: 2;\n" +
+                        "      display: flex;\n" +
+                        "      align-items: center;\n" +
+                        "      justify-content: center;\n" +
+                        "      gap: 16px;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .logo {\n" +
+                        "      width: 48px;\n" +
+                        "      height: 48px;\n" +
+                        "      position: relative;\n" +
+                        "      display: flex;\n" +
+                        "      align-items: center;\n" +
+                        "      justify-content: center;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .logo-card {\n" +
+                        "      position: absolute;\n" +
+                        "      width: 32px;\n" +
+                        "      height: 20px;\n" +
+                        "      background: #ffffff;\n" +
+                        "      border-radius: 6px;\n" +
+                        "      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .logo-card:nth-child(1) {\n" +
+                        "      transform: rotate(15deg) translate(-6px, -10px);\n" +
+                        "      opacity: 0.9;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .logo-card:nth-child(2) {\n" +
+                        "      transform: rotate(5deg) translate(0px, -3px);\n" +
+                        "      opacity: 0.95;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .logo-card:nth-child(3) {\n" +
+                        "      transform: rotate(-5deg) translate(6px, 4px);\n" +
+                        "      opacity: 1;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .header h1 { \n" +
+                        "      color: #ffffff; \n" +
+                        "      font-size: 32px; \n" +
+                        "      margin: 0; \n" +
+                        "      font-weight: 700;\n" +
+                        "      letter-spacing: -0.5px;\n" +
+                        "      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .body { \n" +
+                        "      padding: 50px 40px; \n" +
+                        "      color: #1a1a1a; \n" +
+                        "      line-height: 1.7; \n" +
+                        "      background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .body h2 { \n" +
+                        "      margin-bottom: 30px; \n" +
+                        "      font-size: 28px; \n" +
+                        "      color: #1a1a2e; \n" +
+                        "      font-weight: 700; \n" +
+                        "      text-align: center;\n" +
+                        "      letter-spacing: -0.5px;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .body p { \n" +
+                        "      margin-bottom: 30px; \n" +
+                        "      font-size: 18px; \n" +
+                        "      text-align: center; \n" +
+                        "      color: #4a5568;\n" +
+                        "      max-width: 500px;\n" +
+                        "      margin-left: auto;\n" +
+                        "      margin-right: auto;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .features-grid { \n" +
+                        "      display: grid; \n" +
+                        "      grid-template-columns: 1fr 1fr; \n" +
+                        "      gap: 24px; \n" +
+                        "      margin: 40px 0; \n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .card { \n" +
+                        "      background: #ffffff;\n" +
+                        "      border-radius: 16px; \n" +
+                        "      padding: 28px;\n" +
+                        "      position: relative;\n" +
+                        "      border: 1px solid rgba(30, 58, 138, 0.1);\n" +
+                        "      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);\n" +
+                        "      overflow: hidden;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .card::before {\n" +
+                        "      content: '';\n" +
+                        "      position: absolute;\n" +
+                        "      top: 0;\n" +
+                        "      left: 0;\n" +
+                        "      right: 0;\n" +
+                        "      height: 3px;\n" +
+                        "      background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);\n" +
+                        "      transform: translateX(-100%);\n" +
+                        "      transition: transform 0.3s ease;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .card:hover::before {\n" +
+                        "      transform: translateX(0);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .card:hover { \n" +
+                        "      transform: translateY(-8px); \n" +
+                        "      box-shadow: 0 20px 40px rgba(30, 58, 138, 0.15);\n" +
+                        "      border-color: rgba(30, 58, 138, 0.2);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .card-content h3 { \n" +
+                        "      margin: 0 0 12px; \n" +
+                        "      font-size: 20px; \n" +
+                        "      color: #1a1a2e; \n" +
+                        "      font-weight: 600;\n" +
+                        "      letter-spacing: -0.3px;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .card-content p { \n" +
+                        "      margin: 0; \n" +
+                        "      font-size: 15px; \n" +
+                        "      color: #64748b; \n" +
+                        "      line-height: 1.6;\n" +
+                        "      text-align: left;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .signature { \n" +
+                        "      padding: 40px; \n" +
+                        "      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);\n" +
+                        "      border-top: 1px solid rgba(226, 232, 240, 0.8);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .signature p { \n" +
+                        "      margin-bottom: 24px; \n" +
+                        "      text-align: center; \n" +
+                        "      color: #475569;\n" +
+                        "      font-size: 16px;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .signature .name { \n" +
+                        "      font-weight: 700; \n" +
+                        "      color: #1a1a2e; \n" +
+                        "      margin-bottom: 8px; \n" +
+                        "      font-size: 20px; \n" +
+                        "      text-align: center;\n" +
+                        "      letter-spacing: -0.3px;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .signature .title { \n" +
+                        "      font-size: 15px; \n" +
+                        "      color: #64748b; \n" +
+                        "      text-align: center; \n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .footer { \n" +
+                        "      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);\n" +
+                        "      text-align: center; \n" +
+                        "      padding: 40px 30px; \n" +
+                        "      font-size: 14px; \n" +
+                        "      color: #94a3b8; \n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .footer-links {\n" +
+                        "      margin-bottom: 20px;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .footer a { \n" +
+                        "      margin: 0 8px; \n" +
+                        "      color: #e2e8f0; \n" +
+                        "      text-decoration: none; \n" +
+                        "      padding: 8px 16px; \n" +
+                        "      border-radius: 8px; \n" +
+                        "      transition: all 0.2s ease;\n" +
+                        "      font-weight: 500;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .footer a:hover { \n" +
+                        "      background: rgba(30, 58, 138, 0.2);\n" +
+                        "      color: #ffffff;\n" +
+                        "      transform: translateY(-1px);\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    .footer p { \n" +
+                        "      margin: 0; \n" +
+                        "      font-size: 13px;\n" +
+                        "      opacity: 0.8;\n" +
+                        "    }\n" +
+                        "    \n" +
+                        "    @media only screen and (max-width: 480px) {\n" +
+                        "      .wrapper { \n" +
+                        "        padding: 20px 10px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .body, .signature { \n" +
+                        "        padding: 30px 25px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .header { \n" +
+                        "        padding: 40px 20px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .header-content {\n" +
+                        "        flex-direction: column;\n" +
+                        "        gap: 12px;\n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .header h1 { \n" +
+                        "        font-size: 26px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .body h2 { \n" +
+                        "        font-size: 24px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .body p {\n" +
+                        "        font-size: 16px !important;\n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .features-grid { \n" +
+                        "        grid-template-columns: 1fr !important;\n" +
+                        "        gap: 16px;\n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .card { \n" +
+                        "        padding: 20px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .footer { \n" +
+                        "        padding: 30px 20px !important; \n" +
+                        "      }\n" +
+                        "      \n" +
+                        "      .footer a { \n" +
+                        "        display: inline-block; \n" +
+                        "        margin: 4px 6px !important; \n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  </style>\n" +
+                        "</head>\n" +
+                        "<body class=\"wrapper\">\n" +
+                        "  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;\">\n" +
+                        "    <tr><td align=\"center\">\n" +
+                        "      <table class=\"container\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;\">\n" +
+                        "        <tr><td class=\"header\">\n" +
+                        "          <div class=\"header-content\">\n" +
+                        "            <div class=\"logo\">\n" +
+                        "              <div class=\"logo-card\"></div>\n" +
+                        "              <div class=\"logo-card\"></div>\n" +
+                        "              <div class=\"logo-card\"></div>\n" +
+                        "            </div>\n" +
+                        "            <h1>TridePay</h1>\n" +
+                        "          </div>\n" +
+                        "        </td></tr>\n" +
+                        "        <tr><td class=\"body\">\n" +
+                        "          <h2>Welcome aboard, [Full Name]</h2>\n" +
+                        "          <p>Thank you for joining our waitlist. You're now part of the select group helping us build Nigeria's most professional payments platform.</p>\n" +
+                        "          <div class=\"features-grid\">\n" +
+                        "            <div class=\"card\">\n" +
+                        "              <div class=\"card-content\">\n" +
+                        "                <h3>Secure Digital Wallet</h3>\n" +
+                        "                <p>Store all your cards in one encrypted vault.</p>\n" +
+                        "              </div>\n" +
+                        "            </div>\n" +
+                        "            <div class=\"card\">\n" +
+                        "              <div class=\"card-content\">\n" +
+                        "                <h3>Instant Tap Payments</h3>\n" +
+                        "                <p>Fast, reliable NFC transactions anywhere.</p>\n" +
+                        "              </div>\n" +
+                        "            </div>\n" +
+                        "            <div class=\"card\">\n" +
+                        "              <div class=\"card-content\">\n" +
+                        "                <h3>Virtual Dollar Cards</h3>\n" +
+                        "                <p>Create and manage multi-currency cards instantly.</p>\n" +
+                        "              </div>\n" +
+                        "            </div>\n" +
+                        "            <div class=\"card\">\n" +
+                        "              <div class=\"card-content\">\n" +
+                        "                <h3>Payment Splitting</h3>\n" +
+                        "                <p>Easily divide bills and split costs among people.</p>\n" +
+                        "              </div>\n" +
+                        "            </div>\n" +
+                        "          </div>\n" +
+                        "        </td></tr>\n" +
+                        "        <tr><td class=\"signature\">\n" +
+                        "          <p>We're excited to have you with us. Expect exclusive updates as we move closer to launch.</p>\n" +
+                        "          <p class=\"name\">Oluwakamiye Adetula</p>\n" +
+                        "          <p class=\"title\">CEO &amp; Co-Founder, TridePay</p>\n" +
+                        "        </td></tr>\n" +
+                        "        <tr><td class=\"footer\">\n" +
+                        "          <div class=\"footer-links\">\n" +
+                        "            <a href=\"#\">Privacy Policy</a>\n" +
+                        "            <a href=\"#\">Terms of Service</a>\n" +
+                        "            <a href=\"#\">Unsubscribe</a>\n" +
+                        "          </div>\n" +
+                        "          <p>© 2025 TridePay. All rights reserved.</p>\n" +
+                        "        </td></tr>\n" +
+                        "      </table>\n" +
+                        "    </td></tr>\n" +
+                        "  </table>\n" +
+                        "</body>\n" +
+                        "</html>";
 
-        try {
-            emailService.sendHtmlEmail(email, subject, htmlContent);
-        } catch (MessagingException e) {
-           System.out.println();
-        }
+        String htmlContent = htmlTemplate.replace("[Full Name]", fullName);
+        emailService.sendHtmlEmail(email, subject, htmlContent);
     }
 }
