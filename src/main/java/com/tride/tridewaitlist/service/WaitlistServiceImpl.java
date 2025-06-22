@@ -1,9 +1,7 @@
 package com.tride.tridewaitlist.service;
 
 import com.tride.tridewaitlist.model.Waitlist;
-//import com.tride.tridewaitlist.repository.WaitlistRepository;
-import jakarta.mail.MessagingException;
-import lombok.extern.slf4j.Slf4j;
+import com.tride.tridewaitlist.repository.WaitlistRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +19,7 @@ import java.util.Map;
 @Service
 public class WaitlistServiceImpl implements WaitlistService {
     private static final Logger log = LoggerFactory.getLogger(WaitlistServiceImpl.class);
+    private final WaitlistRepository waitlistRepository;
 
     private final EmailService emailService;
     private final RestTemplate restTemplate;
@@ -28,12 +27,13 @@ public class WaitlistServiceImpl implements WaitlistService {
     private final String airtableBaseId;
     private final String airtableTableName;
 
-    public WaitlistServiceImpl(//WaitlistRepository waitlistRepository,
-                               EmailService emailService,
+    public WaitlistServiceImpl(
+                               WaitlistRepository waitlistRepository, EmailService emailService,
                                RestTemplate restTemplate,
                                @Value("${airtable.api-key}") String airtableApiKey,
                                @Value("${airtable.base-id}") String airtableBaseId,
                                @Value("${airtable.table-name}") String airtableTableName) {
+        this.waitlistRepository = waitlistRepository;
         this.emailService = emailService;
         this.restTemplate = restTemplate;
         this.airtableApiKey = airtableApiKey;
@@ -42,17 +42,13 @@ public class WaitlistServiceImpl implements WaitlistService {
     }
 
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
-//
-//    @Override
-//    public boolean emailExists(String email) {
-//        //return waitlistRepository.existsByEmail(email);
-//        return yes;
-//    }
 
     @Override
     public boolean emailExists(String email) {
-        return false;
+        return waitlistRepository.existsByEmail(email);
     }
+
+
 
     @Override
     public void addToWaitlist(Waitlist waitlist) {
@@ -60,6 +56,7 @@ public class WaitlistServiceImpl implements WaitlistService {
             throw new IllegalArgumentException("Invalid email format");
         }
         waitlist.setJoinDate(LocalDateTime.now());
+        waitlistRepository.save(waitlist);
 
         try {
             String url = String.format("https://api.airtable.com/v0/%s/%s", airtableBaseId.trim(), airtableTableName.trim());
