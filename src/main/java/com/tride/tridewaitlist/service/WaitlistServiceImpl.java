@@ -43,10 +43,10 @@ public class WaitlistServiceImpl implements WaitlistService {
 
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
 
-    @Override
-    public boolean emailExists(String email) {
-        return waitlistRepository.existsByEmail(email);
-    }
+//    @Override
+//    public boolean emailExists(String email) {
+//        return waitlistRepository.existsByEmail(email);
+//    }
 
 
 
