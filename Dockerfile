@@ -1,28 +1,14 @@
-# Stage 1: Build with Maven
-FROM maven:3.9.4-eclipse-temurin-17-alpine AS builder
+# Use a lightweight OpenJDK 17 base image
+FROM openjdk:17-jdk-alpine
+
+# Set the working directory inside the container
 WORKDIR /app
 
-# make sure mvn is on PATH
-ENV MAVEN_HOME=/opt/maven \
-    PATH=$MAVEN_HOME/bin:$PATH
+# Copy the JAR file into the container
+COPY TrideWaitlist-0.0.1-SNAPSHOT.jar /app/app.jar
 
-# now mvn will resolve
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
-
-# Copy source and build
-COPY src ./src
-RUN mvn clean package -DskipTests -B
-
-# Stage 2: Run with JDK
-FROM eclipse-temurin:17-jdk-alpine
-WORKDIR /app
-
-# Copy fat JAR from builder
-COPY --from=builder /app/target/*.jar app.jar
-
-# Expose the port your app listens on
+# Expose the port your application runs on (default for Spring Boot is 8080)
 EXPOSE 8080
 
-# Launch the app
-ENTRYPOINT ["java","-jar","app.jar"]
+# Command to run the JAR file
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
