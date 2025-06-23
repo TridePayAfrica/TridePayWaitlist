@@ -27,6 +27,3 @@ build/
 ### VS Code ###
 .vscode/
 
-
-/target/
-*.jar
